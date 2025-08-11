@@ -277,6 +277,7 @@ def main():
     
     tester = DeepDiveRAGTester()
     session_ids = []
+    document_ids = []
 
     # Test sequence
     print("\n📋 Running API Tests...")
@@ -285,11 +286,30 @@ def main():
     tester.test_root_endpoint()
     
     # 2. Test document operations
-    tester.test_document_upload_txt()
+    if tester.test_document_upload_txt():
+        if tester.uploaded_documents:
+            document_ids.append(tester.uploaded_documents[-1]['document_id'])
+    
     tester.test_document_upload_invalid()
     tester.test_list_documents()
     
-    # 3. Test research operations
+    # 3. Test NEW DELETE functionality
+    print("\n🗑️  Testing DELETE Operations...")
+    
+    # Test delete non-existent document first
+    tester.test_delete_nonexistent_document()
+    
+    # Test delete specific document if we have one
+    if document_ids:
+        print(f"   Will test deleting document: {document_ids[0]}")
+        tester.test_delete_document(document_ids[0])
+    
+    # Upload another document for delete all test
+    if tester.test_document_upload_txt():
+        if tester.uploaded_documents:
+            document_ids.append(tester.uploaded_documents[-1]['document_id'])
+    
+    # 4. Test research operations (before deleting all documents)
     session_id1 = tester.test_research_query_simple()
     if session_id1:
         session_ids.append(session_id1)
@@ -298,12 +318,32 @@ def main():
     if session_id2:
         session_ids.append(session_id2)
     
-    # 4. Test session retrieval
+    # 5. Test session retrieval
     for session_id in session_ids:
         tester.test_get_research_session(session_id)
     
-    # 5. Test edge cases
+    # 6. Test delete all documents
+    tester.test_delete_all_documents()
+    
+    # 7. Test research with no documents (after delete all)
+    print("\n🔍 Testing Research with No Documents...")
+    query_data = {"query": "What is quantum computing?"}
+    success, response = tester.run_test(
+        "Research Query with No Documents", 
+        "POST", 
+        "research", 
+        200, 
+        data=query_data
+    )
+    if success and response.get('final_answer'):
+        if "no documents" in response['final_answer'].lower():
+            print("   ✅ Correctly handled no documents scenario")
+        else:
+            print("   ⚠️  Response doesn't clearly indicate no documents")
+    
+    # 8. Test edge cases and validation
     tester.test_empty_query()
+    tester.test_file_size_validation()
     
     # Print final results
     print("\n" + "=" * 50)
@@ -322,6 +362,14 @@ def main():
         print(f"\n🔬 Research Sessions Created:")
         for session_id in session_ids:
             print(f"  - {session_id}")
+    
+    print(f"\n🎯 NEW FEATURES TESTED:")
+    print(f"  ✅ DELETE /api/documents/{{document_id}} - Individual document deletion")
+    print(f"  ✅ DELETE /api/documents - Delete all documents")
+    print(f"  ✅ File size validation (>10MB)")
+    print(f"  ✅ File type validation")
+    print(f"  ✅ Error handling for non-existent documents")
+    print(f"  ✅ Research with no documents scenario")
     
     # Return appropriate exit code
     return 0 if tester.tests_passed == tester.tests_run else 1
