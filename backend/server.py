@@ -80,6 +80,11 @@ class DocumentUploadResponse(BaseModel):
     chunk_count: int
     message: str
 
+class DocumentDeleteResponse(BaseModel):
+    message: str
+    deleted_document_id: str
+    deleted_chunks: int
+
 class ResearchResponse(BaseModel):
     session_id: str
     query: str
@@ -498,7 +503,7 @@ async def upload_document(file: UploadFile = File(...)):
         elif file_type == 'txt':
             text = content.decode('utf-8')
         else:
-            raise HTTPException(status_code=400, detail="Unsupported file format")
+            raise HTTPException(status_code=400, detail="Unsupported file format. Please upload PDF, DOCX, TXT, or HTML files.")
         
         if not text.strip():
             raise HTTPException(status_code=400, detail="No text content found in file")
@@ -538,18 +543,96 @@ async def upload_document(file: UploadFile = File(...)):
             document_id=document_id,
             filename=filename,
             chunk_count=len(chunks),
-            message=f"Document processed successfully into {len(chunks)} chunks"
+            message=f"Document '{filename}' processed successfully into {len(chunks)} chunks"
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logging.error(f"Error uploading document: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Error processing document: {str(e)}")
+
+@api_router.delete("/documents/{document_id}", response_model=DocumentDeleteResponse)
+async def delete_document(document_id: str):
+    """Delete a document and all its associated chunks"""
+    try:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            # First, check if document exists
+            cursor = await db.execute('''
+                SELECT filename, chunk_count FROM documents WHERE id = ?
+            ''', (document_id,))
+            document = await cursor.fetchone()
+            
+            if not document:
+                raise HTTPException(status_code=404, detail="Document not found")
+            
+            filename, chunk_count = document
+            
+            # Delete all chunks associated with this document
+            await db.execute('''
+                DELETE FROM document_chunks WHERE document_id = ?
+            ''', (document_id,))
+            
+            # Delete the document
+            await db.execute('''
+                DELETE FROM documents WHERE id = ?
+            ''', (document_id,))
+            
+            await db.commit()
+            
+            return DocumentDeleteResponse(
+                message=f"Document '{filename}' and {chunk_count} associated chunks deleted successfully",
+                deleted_document_id=document_id,
+                deleted_chunks=chunk_count
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error deleting document: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deleting document: {str(e)}")
+
+@api_router.delete("/documents")
+async def delete_all_documents():
+    """Delete all documents and chunks"""
+    try:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            # Count documents before deletion
+            cursor = await db.execute('SELECT COUNT(*) FROM documents')
+            doc_count = (await cursor.fetchone())[0]
+            
+            cursor = await db.execute('SELECT COUNT(*) FROM document_chunks')
+            chunk_count = (await cursor.fetchone())[0]
+            
+            # Delete all chunks first (due to foreign key constraint)
+            await db.execute('DELETE FROM document_chunks')
+            
+            # Delete all documents
+            await db.execute('DELETE FROM documents')
+            
+            # Delete all research sessions
+            await db.execute('DELETE FROM research_sessions')
+            
+            await db.commit()
+            
+            return {
+                "message": f"All documents deleted successfully",
+                "deleted_documents": doc_count,
+                "deleted_chunks": chunk_count
+            }
+            
+    except Exception as e:
+        logging.error(f"Error deleting all documents: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deleting documents: {str(e)}")
 
 @api_router.post("/research", response_model=ResearchResponse)
 async def research_query(request: QueryRequest):
     """Process a research query through the RAG pipeline"""
     try:
-        session_id, result = await RAGPipeline.process_query(request.query)
+        if not request.query or not request.query.strip():
+            raise HTTPException(status_code=400, detail="Query cannot be empty")
+            
+        session_id, result = await RAGPipeline.process_query(request.query.strip())
         
         if isinstance(result, str):
             # Error occurred
@@ -562,9 +645,11 @@ async def research_query(request: QueryRequest):
         
         return ResearchResponse(**result)
         
+    except HTTPException:
+        raise
     except Exception as e:
         logging.error(f"Error processing research query: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Error processing research: {str(e)}")
 
 @api_router.get("/research/{session_id}", response_model=ResearchResponse)
 async def get_research_session(session_id: str):
@@ -577,7 +662,7 @@ async def get_research_session(session_id: str):
             session = await cursor.fetchone()
             
             if not session:
-                raise HTTPException(status_code=404, detail="Session not found")
+                raise HTTPException(status_code=404, detail="Research session not found")
             
             # Parse JSON fields
             citations = json.loads(session[9]) if session[9] else []
@@ -593,9 +678,11 @@ async def get_research_session(session_id: str):
                 citations=citations
             )
             
+    except HTTPException:
+        raise
     except Exception as e:
         logging.error(f"Error getting research session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Error retrieving session: {str(e)}")
 
 @api_router.get("/documents")
 async def list_documents():
@@ -621,7 +708,54 @@ async def list_documents():
             
     except Exception as e:
         logging.error(f"Error listing documents: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Error retrieving documents: {str(e)}")
+
+@api_router.get("/documents/{document_id}")
+async def get_document_details(document_id: str):
+    """Get detailed information about a specific document"""
+    try:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            # Get document details
+            cursor = await db.execute('''
+                SELECT id, filename, file_type, upload_date, chunk_count, content
+                FROM documents WHERE id = ?
+            ''', (document_id,))
+            document = await cursor.fetchone()
+            
+            if not document:
+                raise HTTPException(status_code=404, detail="Document not found")
+            
+            # Get chunks for this document
+            cursor = await db.execute('''
+                SELECT id, content, chunk_index, word_count
+                FROM document_chunks WHERE document_id = ?
+                ORDER BY chunk_index
+            ''', (document_id,))
+            chunks = await cursor.fetchall()
+            
+            return {
+                'id': document[0],
+                'filename': document[1],
+                'file_type': document[2],
+                'upload_date': document[3],
+                'chunk_count': document[4],
+                'content_preview': document[5][:500] + "..." if len(document[5]) > 500 else document[5],
+                'chunks': [
+                    {
+                        'id': chunk[0],
+                        'content': chunk[1],
+                        'chunk_index': chunk[2],
+                        'word_count': chunk[3]
+                    }
+                    for chunk in chunks
+                ]
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error getting document details: {e}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving document details: {str(e)}")
 
 # Include the router in the main app
 app.include_router(api_router)
