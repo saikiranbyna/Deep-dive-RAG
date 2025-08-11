@@ -1,38 +1,213 @@
-.App {
-    text-align: center;
+/* Custom styles for DeepDive RAG */
+
+.citation-link {
+  @apply inline-block bg-blue-100 text-blue-700 px-2 py-1 rounded text-sm font-medium cursor-pointer hover:bg-blue-200 transition-colors;
+  margin: 0 2px;
 }
 
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+.citation-link:hover {
+  text-decoration: underline;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+/* Timeline styles */
+.timeline-step {
+  position: relative;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+.timeline-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 32px;
+  height: 24px;
+  width: 2px;
+  background-color: #e5e7eb;
 }
 
-.App-link {
-    color: #61dafb;
+/* Loading animation */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .5;
+  }
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Research result styling */
+.prose {
+  line-height: 1.7;
+}
+
+.prose p {
+  margin-bottom: 1rem;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.prose ul, .prose ol {
+  margin: 1rem 0;
+  padding-left: 1.5rem;
+}
+
+.prose li {
+  margin-bottom: 0.25rem;
+}
+
+/* Source expansion animation */
+.source-content {
+  transition: all 0.3s ease-in-out;
+}
+
+/* Scrollbar styling for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* File upload styling */
+input[type="file"]::file-selector-button {
+  @apply mr-4 py-2 px-4 rounded border-0 text-sm font-medium bg-blue-50 text-blue-700 cursor-pointer;
+}
+
+input[type="file"]::file-selector-button:hover {
+  @apply bg-blue-100;
+}
+
+/* Status indicators */
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.status-indicator::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-processing::before {
+  background-color: #f59e0b;
+  animation: pulse 2s infinite;
+}
+
+.status-completed::before {
+  background-color: #10b981;
+}
+
+.status-failed::before {
+  background-color: #ef4444;
+}
+
+/* Enhanced button styles */
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.btn-primary {
+  @apply bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-secondary {
+  @apply bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-300 transition-colors;
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: all 0.2s ease-in-out;
+}
+
+.card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive design adjustments */
+@media (max-width: 768px) {
+  .citation-link {
+    display: inline-block;
+    margin: 2px;
+  }
+  
+  .timeline-step {
+    padding-left: 0;
+  }
+  
+  .timeline-step::after {
+    display: none;
+  }
+}
+
+/* Dark mode support (future enhancement) */
+@media (prefers-color-scheme: dark) {
+  /* This can be implemented later for dark mode support */
+}
+
+/* Animation for research processing */
+.research-processing {
+  background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+  background-size: 400% 400%;
+  animation: gradient 15s ease infinite;
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Syntax highlighting for code blocks (if needed) */
+.code-block {
+  @apply bg-gray-100 rounded p-3 text-sm font-mono overflow-x-auto;
+}
+
+/* Citation highlighting in text */
+.citation-highlight {
+  background-color: rgba(59, 130, 246, 0.1);
+  border-radius: 3px;
+  padding: 1px 2px;
+}
+
+/* Source score visualization */
+.score-bar {
+  height: 4px;
+  background-color: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.score-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ef4444 0%, #f59e0b 50%, #10b981 100%);
+  transition: width 0.3s ease;
 }
